@@ -1,0 +1,43 @@
+hosts:
+- id: a42c1d71-2713-42da-b94d-8b12da012156
+  name: faegt001185os
+  hostname: 10.194.183.166
+  port: 22
+  username: amd
+  auth_method: password
+  identity_file: null
+  identity_passphrase: null
+  password: amd123
+  jump_enabled: false
+  jump_hostname: null
+  jump_port: 22
+  jump_username: null
+  jump_auth_method: identity_file
+  jump_identity_file: null
+  jump_password: null
+  jump_alias: null
+  commands:
+  - amd-smi monitor
+  poll_interval_seconds: 3600
+  auto_poll_enabled: false
+- id: a9988800-e371-4ec9-a014-faa70ed475ee
+  name: Foundation
+  hostname: gpu-3
+  port: 22
+  username: amd
+  auth_method: password
+  identity_file: null
+  identity_passphrase: null
+  password: null
+  jump_enabled: true
+  jump_hostname: 45.76.28.198
+  jump_port: 22
+  jump_username: amd
+  jump_auth_method: identity_file
+  jump_identity_file: C:\Workarea\key\aackey\aac-key
+  jump_password: null
+  jump_alias: gpu-3
+  commands:
+  - amd-smi monitor
+  poll_interval_seconds: 3600
+  auto_poll_enabled: false

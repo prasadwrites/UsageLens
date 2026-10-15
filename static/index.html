@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UsageLens — System Usage Dashboard</title>
+<link rel="stylesheet" href="/style.css?v=20">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body class="viz-root">
+<header class="topbar">
+  <h1>UsageLens</h1>
+  <p class="subtitle">SSH-based system usage tracking for rented systems</p>
+  <button id="themeToggle" class="btn-ghost" type="button">Dark mode</button>
+</header>
+
+<main>
+  <!-- ==================== PAGE 1: Host Management ==================== -->
+  <section id="pageHosts">
+    <div class="page-header">
+      <h2>Hosts</h2>
+      <div class="page-header-actions">
+        <button type="button" id="btnCollectAll" class="btn-ghost btn-sm">Collect all</button>
+        <button type="button" id="btnAddHost" class="btn-primary">+ Add host</button>
+      </div>
+    </div>
+    <div id="collectAllStatus" class="ops-status" style="margin-bottom:12px"></div>
+
+    <div id="hostFormWrap" class="panel" style="display:none">
+      <div class="form-header">
+        <h3 id="formTitle">Add host</h3>
+        <button type="button" id="btnCancelForm" class="btn-ghost btn-sm">Cancel</button>
+      </div>
+      <form id="hostForm" class="host-form">
+        <input type="hidden" id="hostId" value="">
+        <div class="field-row">
+          <label>Name<input id="fName" required placeholder="customer-box-1"></label>
+          <label>Hostname / IP<input id="fHostname" required placeholder="10.194.183.166"></label>
+          <label class="narrow">Port<input id="fPort" type="number" value="22"></label>
+        </div>
+        <div class="field-row">
+          <label>Username<input id="fUsername" required placeholder="prasnair"></label>
+          <label>Auth method
+            <select id="fAuthMethod">
+              <option value="identity_file">Identity file</option>
+              <option value="password">Password</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label id="identityFieldWrap">Identity file path<input id="fIdentityFile" placeholder="C:\path\to\key"></label>
+          <label id="passwordFieldWrap" style="display:none">Password<input id="fPassword" type="password" placeholder="(leave blank to keep existing)"></label>
+        </div>
+        <div class="field-row">
+          <label class="checkbox-label"><input type="checkbox" id="fJumpEnabled"> Connect via jump host</label>
+        </div>
+        <div id="jumpFieldsWrap" style="display:none" class="jump-fields-panel">
+          <div class="field-row">
+            <label>Jump host hostname / IP<input id="fJumpHostname" placeholder="45.76.28.198"></label>
+            <label class="narrow">Port<input id="fJumpPort" type="number" value="22"></label>
+            <label>Username<input id="fJumpUsername" placeholder="amd"></label>
+          </div>
+          <div class="field-row">
+            <label>Jump host auth method
+              <select id="fJumpAuthMethod">
+                <option value="identity_file">Identity file</option>
+                <option value="password">Password</option>
+              </select>
+            </label>
+            <label id="jumpIdentityWrap">Jump host identity file<input id="fJumpIdentityFile" placeholder="C:\path\to\key"></label>
+            <label id="jumpPasswordWrap" style="display:none">Jump host password<input id="fJumpPassword" type="password" placeholder="(leave blank to keep existing)"></label>
+          </div>
+          <div class="field-row">
+            <label>Target alias (SSH command from jump host to reach this device)<input id="fJumpAlias" placeholder="e.g. gpu-3"></label>
+          </div>
+        </div>
+        <div class="field-row">
+          <label class="full">Additional commands to run over SSH (optional — output shown in "Raw command output")
+            <textarea id="fCommands" rows="2" placeholder="e.g. nvidia-smi, df -h, sinfo (one per line)"></textarea>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Poll interval
+            <select id="fPollInterval">
+              <option value="3600">Every 1 hour</option>
+              <option value="7200">Every 2 hours</option>
+              <option value="21600">Every 6 hours</option>
+              <option value="43200" selected>Every 12 hours</option>
+              <option value="86400">Every 24 hours</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row actions">
+          <button type="submit" class="btn-primary">Save host</button>
+          <button type="button" id="resetForm" class="btn-ghost">Clear form</button>
+        </div>
+        <p class="hint" id="hostFormStatus" style="display:none"></p>
+        <p class="hint">Password auth stores the password in <code>data/hosts.yaml</code> in plaintext — prefer an identity file when possible.</p>
+      </form>
+    </div>
+
+    <div class="host-list" id="hostList"></div>
+
+    <div id="overviewSection" style="display:none">
+      <div class="page-header">
+        <h2>Usage Overview</h2>
+      </div>
+      <div class="range-selector" id="overviewRangeSelector">
+        <button type="button" class="overview-range-btn" data-range="7d">Last 1 week</button>
+        <button type="button" class="overview-range-btn" data-range="14d">Last 2 weeks</button>
+        <button type="button" class="overview-range-btn" data-range="30d">Last 1 month</button>
+        <button type="button" class="overview-range-btn" data-range="60d">Last 2 months</button>
+        <button type="button" class="overview-range-btn" data-range="90d">Last 3 months</button>
+      </div>
+      <div id="overviewLoading" class="empty-state" style="display:none">Loading usage data…</div>
+      <div class="overview-grid" id="overviewGrid"></div>
+    </div>
+  </section>
+
+  <!-- ==================== PAGE 2: Operations ==================== -->
+  <section id="pageOps" style="display:none">
+    <button type="button" id="btnBack" class="btn-back">&larr; Back to hosts</button>
+
+    <div class="panel host-profile" id="hostProfile"></div>
+
+    <div class="ops-actions" id="opsActions">
+      <button type="button" id="btnTest" class="btn-ghost">Test connection</button>
+      <button type="button" id="btnCollect" class="btn-ghost">Collect now</button>
+      <button type="button" id="btnAutoPoll" class="btn-ghost">Auto-poll: OFF</button>
+      <div class="ops-status" id="opsStatus"></div>
+    </div>
+    <div id="collectProgress" class="collect-progress" style="display:none">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+      <div class="progress-steps" id="progressSteps"></div>
+    </div>
+
+    <!-- Snapshot browser -->
+    <div class="panel" id="snapshotPanel">
+      <div class="panel-header-row">
+        <h2>Snapshot Browser</h2>
+        <div class="snapshot-controls">
+          <label class="snapshot-select-label">Snapshot
+            <select id="snapshotSelect"><option value="">Select a snapshot…</option></select>
+          </label>
+          <button type="button" id="btnDeleteSnapshot" class="btn-ghost btn-sm btn-danger" style="display:none">Delete snapshot</button>
+        </div>
+      </div>
+      <div id="snapshotEmpty" class="empty-state">No snapshots collected yet. Click "Collect now" above to gather data.</div>
+      <div id="snapshotDetail" style="display:none">
+        <div class="stat-cards" id="snapStatCards"></div>
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Time spent per user</h3>
+            <span class="muted-note">Total hours from login history</span>
+          </div>
+          <div class="chart-scroll"><canvas id="snapSessionsChart"></canvas></div>
+        </div>
+        <div class="table-card">
+          <div class="chart-card-header"><h3>Login history</h3><span class="muted-note">From `last` command — recent logins, logouts, and session duration</span></div>
+          <table id="snapUserTable">
+            <thead><tr><th>User</th><th>Login</th><th>Logout</th><th>Duration</th><th>Source</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="raw-card">
+          <details>
+            <summary>Raw command output</summary>
+            <div id="snapRawOutput"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historical trends -->
+    <div class="panel" id="dashboardPanel">
+      <h2>Usage Trends</h2>
+      <div class="range-selector" id="rangeSelector">
+        <button type="button" class="range-btn" data-range="7d">Last 1 week</button>
+        <button type="button" class="range-btn" data-range="14d">Last 2 weeks</button>
+        <button type="button" class="range-btn" data-range="30d">Last 1 month</button>
+        <button type="button" class="range-btn" data-range="60d">Last 2 months</button>
+        <button type="button" class="range-btn" data-range="90d">Last 3 months</button>
+      </div>
+      <div id="dashboardEmpty" class="empty-state">No data in the selected range.</div>
+      <div id="dashboardContent" style="display:none">
+        <div class="stat-cards" id="trendStatCards"></div>
+
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>Logged-in users over time</h3>
+            <span class="muted-note">Distinct users per day from `who` output</span>
+          </div>
+          <div class="chart-scroll"><canvas id="usersChart"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>System load over time</h3>
+            <span class="muted-note">Average load averages (1/5/15 min) per day from `uptime`</span>
+          </div>
+          <div class="chart-scroll"><canvas id="loadChart"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <h3>User activity heatmap — hour of day x date</h3>
+            <span class="muted-note">Darker = more distinct users logged in during that hour</span>
+          </div>
+          <div id="heatmapWrap" class="chart-scroll"></div>
+          <div class="legend-row" id="heatmapLegend"></div>
+        </div>
+
+        <div class="table-card">
+          <div class="chart-card-header">
+            <h3>User summary</h3>
+            <span class="muted-note" id="userSummaryNote"></span>
+          </div>
+          <table id="userSummaryTable">
+            <thead><tr><th>User</th><th>First seen</th><th>Last seen</th><th>Days active</th><th>Sessions</th><th>Total hours</th><th>Sources</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/app.js?v=20"></script>
+</body>
+</html>

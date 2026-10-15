@@ -1,0 +1,7 @@
+Write a html page which can accept ssh login information (hostname, username , identity file/password) . 
+Login into the systems and retrieve all the information related to system usage. Think you are an FAE 
+who had rented out systems to your customer and would like to gather as much as information regarding usage.
+What programs they are running at what time they are running. This should be shown as visualizations. 
+Some systems are jump host systems. So you should have the facility to add slurm and other commands.
+Once it is added all data should be stored in a yaml file. When html is loaded the data should be loaded from 
+yaml file.  
